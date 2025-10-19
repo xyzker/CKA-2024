@@ -10,8 +10,19 @@
 **Generate the csr key and file**
 
 ```bash
+cd Resources/Day23
 openssl genrsa -out krishna.key 2048
-openssl req -new -key adam.key -out krishna.csr -subj "/CN=krishna"
+openssl req -new -key krishna.key -out krishna.csr -subj "/CN=krishna"
+cat krishna.csr | base64 | tr -d '\n'
+kubectl apply -f /Users/lujingjing/IdeaProjects/CKA-2024/Resources/Day21/myuser-csr.yaml
+kubectl certificate approve myuser-csr
+kubectl get csr myuser-csr -o jsonpath='{.status.certificate}' | base64 --decode > krishna.crt
+kubectl config set-credentials krishna \
+--client-key=Resources/Day23/krishna.key \
+--client-certificate=Resources/Day23/krishna.crt  
+kubectl config set-context krishna \
+--cluster=kind-kind \
+--user=krishna 
 ```
 
 #### to check who you are
