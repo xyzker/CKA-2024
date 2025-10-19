@@ -35,7 +35,7 @@ kubectl create clusterrole node-reader --verb=get,list,watch --resource=nodes
 ```
 
 ```
-kubectl create clusterrolebinding node-reader-binding --clusterrole=node-reader --user=adam
+kubectl create clusterrolebinding node-reader-binding --clusterrole=node-reader --user=krishna
 ```
 
 **Key Points:**
