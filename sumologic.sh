@@ -110,8 +110,6 @@ perform_search() {
     # Fetch and display a sample log entry
     RESULTS=$(curl -s -X GET \
       -u "${SUMO_ACCESS_ID}:${SUMO_ACCESS_KEY}" \
-      -D headers_results.txt \
-      -o results_body.txt \
       "${SUMO_API_ENDPOINT}/search/jobs/${JOB_ID}/messages?offset=0&limit=1")
 
     echo "Sample log entry:"
