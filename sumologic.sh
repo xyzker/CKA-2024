@@ -37,11 +37,9 @@ perform_search() {
 
   # Step 1: Create search job
   echo "[1/3] Creating search job..."
-  curl -s -X POST \
+  JOB_RESPONSE=$(curl -s -X POST \
     -u "${SUMO_ACCESS_ID}:${SUMO_ACCESS_KEY}" \
     -H "Content-Type: application/json" \
-    -D headers.txt \
-    -o body.txt \
     "${SUMO_API_ENDPOINT}/search/jobs" \
     -d "{
       \"query\": \"${SEARCH_QUERY}\",
@@ -50,15 +48,7 @@ perform_search() {
       \"timeZone\": \"Asia/Singapore\",
       \"autoParsingMode\": \"AutoParse\",
       \"requiresRawMessages\": true
-    }"
-
-  echo "Response headers:"
-  cat headers.txt
-  echo ""
-  JOB_RESPONSE=$(cat body.txt)
-
-  # Extract job ID and status link
-  echo "Raw job response: ${JOB_RESPONSE}"
+    }")
 
   JOB_ID=$(echo "${JOB_RESPONSE}" | jq -r '.id')
   STATUS_LINK=$(echo "${JOB_RESPONSE}" | jq -r '.link.href')
@@ -71,9 +61,6 @@ perform_search() {
 
   echo "✓ Search job created: ${JOB_ID}, Status Link: ${STATUS_LINK}"
   echo ""
-
-  # Cleanup temp files
-  rm -f headers.txt body.txt
 
   # Step 2: Poll for job completion
   echo "[2/3] Polling for job completion..."
@@ -88,25 +75,15 @@ perform_search() {
       return 2  # Return error code 2 for timeout
     fi
 
-    curl -s -X GET \
+    JOB_STATUS=$(curl -s -X GET \
       -u "${SUMO_ACCESS_ID}:${SUMO_ACCESS_KEY}" \
-      -D headers_poll.txt \
-      -o status_body.txt \
-      "${STATUS_LINK}"
-
-    echo "Polling response headers:"
-    cat headers_poll.txt
-    echo ""
-    JOB_STATUS=$(cat status_body.txt)
+      "${STATUS_LINK}")
 
     STATE=$(echo "${JOB_STATUS}" | jq -r '.state')
     MSG_COUNT=$(echo "${JOB_STATUS}" | jq -r '.messageCount')
     RECORD_COUNT=$(echo "${JOB_STATUS}" | jq -r '.recordCount')
 
     echo "  State: ${STATE} | Messages: ${MSG_COUNT} | Records: ${RECORD_COUNT} (${ELAPSED}s elapsed)"
-
-    # Cleanup temp files
-    rm -f headers_poll.txt status_body.txt
 
     if [ "${STATE}" != "DONE GATHERING RESULTS" ]; then
       sleep $POLL_INTERVAL
@@ -131,23 +108,15 @@ perform_search() {
     echo ""
 
     # Fetch and display a sample log entry
-    curl -s -X GET \
+    RESULTS=$(curl -s -X GET \
       -u "${SUMO_ACCESS_ID}:${SUMO_ACCESS_KEY}" \
       -D headers_results.txt \
       -o results_body.txt \
-      "${SUMO_API_ENDPOINT}/search/jobs/${JOB_ID}/messages?offset=0&limit=1"
-
-    echo "Results response headers:"
-    cat headers_results.txt
-    echo ""
-    RESULTS=$(cat results_body.txt)
+      "${SUMO_API_ENDPOINT}/search/jobs/${JOB_ID}/messages?offset=0&limit=1")
 
     echo "Sample log entry:"
     echo "${RESULTS}" | jq -r '.messages[0].map._raw' | head -n 3
     echo ""
-
-    # Cleanup temp files
-    rm -f headers_results.txt results_body.txt
 
     return 0  # Success
   else
