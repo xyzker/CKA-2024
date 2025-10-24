@@ -22,26 +22,31 @@ echo ""
 # Function to perform a single search attempt
 perform_search() {
   local attempt=$1
+  # Define a temporary file for the cookie jar
+  local COOKIE_JAR=$(mktemp)
+
+  # Ensure the cookie jar is cleaned up on exit
+  trap 'rm -f ${COOKIE_JAR}' RETURN
 
   echo "----------------------------------------"
   echo "Attempt ${attempt}/${MAX_RETRIES}"
   echo "----------------------------------------"
 
-  # Time range (last 15 minutes - adjust as needed)
+  # Time range (last 24 hours - adjust as needed)
   FROM_TIME=$(date -u -v-24H +"%Y-%m-%dT%H:%M:%S")
-  TO_TIME=$(date -u +"%Y-%m-%dT%H:%M:%S")
+  TO_TIME=$(date -u -v+24H +"%Y-%m-%dT%H:%M:%S")
 
   echo "Query: ${SEARCH_QUERY}"
   echo "Time range: ${FROM_TIME} to ${TO_TIME}"
   echo ""
 
-  # Step 1: Create search job
+  # Step 1: Create search job and SAVE cookies
   echo "[1/3] Creating search job..."
-  curl -s -X POST \
+  # -c "${COOKIE_JAR}" tells curl to save cookies to this file
+  JOB_RESPONSE=$(curl -s -X POST \
     -u "${SUMO_ACCESS_ID}:${SUMO_ACCESS_KEY}" \
     -H "Content-Type: application/json" \
-    -D headers.txt \
-    -o body.txt \
+    -c "${COOKIE_JAR}" \
     "${SUMO_API_ENDPOINT}/search/jobs" \
     -d "{
       \"query\": \"${SEARCH_QUERY}\",
@@ -50,15 +55,7 @@ perform_search() {
       \"timeZone\": \"Asia/Singapore\",
       \"autoParsingMode\": \"AutoParse\",
       \"requiresRawMessages\": true
-    }"
-
-  echo "Response headers:"
-  cat headers.txt
-  echo ""
-  JOB_RESPONSE=$(cat body.txt)
-
-  # Extract job ID and status link
-  echo "Raw job response: ${JOB_RESPONSE}"
+    }")
 
   JOB_ID=$(echo "${JOB_RESPONSE}" | jq -r '.id')
   STATUS_LINK=$(echo "${JOB_RESPONSE}" | jq -r '.link.href')
@@ -66,16 +63,14 @@ perform_search() {
   if [ -z "${JOB_ID}" ] || [ "${JOB_ID}" == "null" ]; then
     echo "ERROR: Failed to create search job"
     echo "Response: ${JOB_RESPONSE}"
+    rm -f "${COOKIE_JAR}"
     return 2  # Return error code 2 for job creation failure
   fi
 
   echo "✓ Search job created: ${JOB_ID}, Status Link: ${STATUS_LINK}"
   echo ""
 
-  # Cleanup temp files
-  rm -f headers.txt body.txt
-
-  # Step 2: Poll for job completion
+  # Step 2: Poll for job completion and SEND cookies
   echo "[2/3] Polling for job completion..."
   POLL_INTERVAL=3
   MAX_WAIT=120
@@ -85,28 +80,21 @@ perform_search() {
   while [ "${STATE}" != "DONE GATHERING RESULTS" ]; do
     if [ $ELAPSED -ge $MAX_WAIT ]; then
       echo "ERROR: Search job timed out after ${MAX_WAIT}s"
+      rm -f "${COOKIE_JAR}"
       return 2  # Return error code 2 for timeout
     fi
 
-    curl -s -X GET \
+    # -b "${COOKIE_JAR}" tells curl to send cookies from this file
+    JOB_STATUS=$(curl -s -X GET \
       -u "${SUMO_ACCESS_ID}:${SUMO_ACCESS_KEY}" \
-      -D headers_poll.txt \
-      -o status_body.txt \
-      "${STATUS_LINK}"
-
-    echo "Polling response headers:"
-    cat headers_poll.txt
-    echo ""
-    JOB_STATUS=$(cat status_body.txt)
+      -b "${COOKIE_JAR}" \
+      "${STATUS_LINK}")
 
     STATE=$(echo "${JOB_STATUS}" | jq -r '.state')
     MSG_COUNT=$(echo "${JOB_STATUS}" | jq -r '.messageCount')
     RECORD_COUNT=$(echo "${JOB_STATUS}" | jq -r '.recordCount')
 
     echo "  State: ${STATE} | Messages: ${MSG_COUNT} | Records: ${RECORD_COUNT} (${ELAPSED}s elapsed)"
-
-    # Cleanup temp files
-    rm -f headers_poll.txt status_body.txt
 
     if [ "${STATE}" != "DONE GATHERING RESULTS" ]; then
       sleep $POLL_INTERVAL
@@ -126,32 +114,23 @@ perform_search() {
     echo "========================================"
     echo "✓ SUCCESS: Teardown completion verified"
     echo "========================================"
-    echo "Found ${MSG_COUNT} log entries matching the teardown completion message"
-    echo "Service teardown completed successfully"
-    echo ""
-
-    # Fetch and display a sample log entry
-    curl -s -X GET \
+    
+    # Fetch and display a sample log entry using the same cookies
+    # -b "${COOKIE_JAR}" is also needed here!
+    RESULTS=$(curl -s -X GET \
       -u "${SUMO_ACCESS_ID}:${SUMO_ACCESS_KEY}" \
-      -D headers_results.txt \
-      -o results_body.txt \
-      "${SUMO_API_ENDPOINT}/search/jobs/${JOB_ID}/messages?offset=0&limit=1"
-
-    echo "Results response headers:"
-    cat headers_results.txt
-    echo ""
-    RESULTS=$(cat results_body.txt)
+      -b "${COOKIE_JAR}" \
+      "${SUMO_API_ENDPOINT}/search/jobs/${JOB_ID}/messages?offset=0&limit=1")
 
     echo "Sample log entry:"
     echo "${RESULTS}" | jq -r '.messages[0].map._raw' | head -n 3
     echo ""
 
-    # Cleanup temp files
-    rm -f headers_results.txt results_body.txt
-
+    rm -f "${COOKIE_JAR}"
     return 0  # Success
   else
     echo "No matching log entries found in this attempt"
+    rm -f "${COOKIE_JAR}"
     return 1  # Return error code 1 for no results (retriable)
   fi
 }
