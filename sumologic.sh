@@ -28,8 +28,8 @@ perform_search() {
   echo "----------------------------------------"
 
   # Time range (last 15 minutes - adjust as needed)
-  FROM_TIME=$(date -u -v-24H +"%Y-%m-%dT%H:%M:%S")
-  TO_TIME=$(date -u -v+24H +"%Y-%m-%dT%H:%M:%S")
+  FROM_TIME=$(date -u -v-4H +"%Y-%m-%dT%H:%M:%S")
+  TO_TIME=$(date -u +"%Y-%m-%dT%H:%M:%S")
 
   echo "Query: ${SEARCH_QUERY}"
   echo "Time range: ${FROM_TIME} to ${TO_TIME}"
@@ -45,7 +45,7 @@ perform_search() {
       \"query\": \"${SEARCH_QUERY}\",
       \"from\": \"${FROM_TIME}\",
       \"to\": \"${TO_TIME}\",
-      \"timeZone\": \"Asia/Singapore\",
+      \"timeZone\": \"UTC\",
       \"autoParsingMode\": \"AutoParse\",
       \"requiresRawMessages\": true
     }")
