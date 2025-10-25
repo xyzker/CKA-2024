@@ -16,6 +16,6 @@ spec:
     spec:
       containers:
       - name: hello-world
-        image: <dockerhub-username>/hello-world:v1
+        image: nginx
         ports:
         - containerPort: 80
