@@ -376,7 +376,7 @@ Let's verify that our Gateway API resources are properly configured:
 
 ```bash
 # Check the Gateway status
-kubectl describe gateway nginx-gateway -n web-app
+kubectl describe gateway nginx-gateway -n nginx-gateway
 
 # Check the HTTPRoute status
 kubectl describe httproute web-route -n web-app
