@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: resource-hog
+  labels:
+    app: resource-hog
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: resource-hog
+  template:
+    metadata:
+      labels:
+        app: resource-hog
+    spec:
+      containers:
+      - name: nginx
+        image: nginx
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "500m"
+      priorityClassName: low-priority
